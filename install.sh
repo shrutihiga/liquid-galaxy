@@ -33,6 +33,7 @@ if [ `getconf LONG_BIT` = "64" ]; then
 EARTH_DEB="http://dl.google.com/dl/earth/client/current/google-earth-stable_current_amd64.deb"
 fi
 EARTH_FOLDER="/opt/google/earth/pro/"
+ARGUMENTS=arguments
 NETWORK_INTERFACE=$(/sbin/route -n | grep "^0.0.0.0" | rev | cut -d' ' -f1 | rev)
 NETWORK_INTERFACE_MAC=$(ifconfig | grep $NETWORK_INTERFACE | awk '{print $5}')
 SSH_PASSPHRASE=""
@@ -240,6 +241,29 @@ sed -i "s/\(DHCP_LG_FRAMES *= *\).*/\1\"$LG_FRAMES\"/" $HOME/personavars.txt
 sed -i "s/\(DHCP_LG_FRAMES_MAX *= *\).*/\1$TOTAL_MACHINES/" $HOME/personavars.txt
 sed -i "s/\(DHCP_OCTET *= *\).*/\1$OCTET/" $HOME/personavars.txt
 sudo $HOME/bin/personality.sh $MACHINE_ID $OCTET > /dev/null
+
+#Install on slave nodes
+if [ $MASTER == true ]; then
+FILEPATH=$(readlink -m arguments)
+SCRIPT="sudo apt-get install curl; scp lg@lg1.local:$FILEPATH $HOME/arguments; bash <(curl -s https://raw.githubusercontent.com/LiquidGalaxyLAB/liquid-galaxy/master/install.sh) < $HOME/arguments"
+USERNAME="lg"
+echo "Installing on slave nodes..."
+echo $(ip route get 8.8.8.8 | awk '{print $NF; exit}') >> arguments 
+read -p "Master local user password (i.e lg password): " MASTER_PASSWORD
+echo $MASTER_PASSWORD >> arguments
+echo $TOTAL_MACHINES >> arguments
+echo $LG_FRAMES >> arguments
+echo $OCTET >> arguments  
+for NAME in $LG_FRAMES; do
+if [ "$NAME" != "lg1" ]; then
+HOSTNAME=$NAME".local"
+SLAVE_ID=$(echo "${NAME: -1}")
+echo $SLAVE_ID | cat - arguments > temp && mv temp arguments
+sudo sh -c "ssh-keyscan ${HOSTNAME} >> /root/.ssh/known_hosts"
+sudo ssh -X -t ${HOSTNAME} ${USERNAME} "${SCRIPT}"
+fi
+done
+fi
 
 # Network configuration
 sudo tee -a "/etc/network/interfaces" > /dev/null << EOM
